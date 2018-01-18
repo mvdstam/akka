@@ -7,7 +7,11 @@ package internal
 import akka.annotation.InternalApi
 import java.util.Optional
 import java.util.ArrayList
+
 import scala.concurrent.ExecutionContextExecutor
+import scala.reflect.ClassTag
+
+import akka.util.OptionVal
 
 /**
  * INTERNAL API
@@ -67,5 +71,30 @@ import scala.concurrent.ExecutionContextExecutor
    * Otherwise "ambiguous reference to overloaded definition" because Function is lambda.
    */
   @InternalApi private[akka] def internalSpawnAdapter[U](f: U ⇒ T, _name: String): ActorRef[U]
+
+  private var transformerRef: OptionVal[ActorRef[Any]] = OptionVal.None
+  private var _messageTransformers: List[(Class[_], Any ⇒ T)] = Nil
+
+  override def addMessageTransformer[U: ClassTag](f: U ⇒ T): ActorRef[U] = {
+    val messageClass = implicitly[ClassTag[U]].runtimeClass
+    // replace existing transformer for same class, only one per class is supported to avoid unbounded growth
+    // in case "same" transformer is added repeatedly
+    _messageTransformers = (messageClass, f.asInstanceOf[Any ⇒ T]) ::
+      _messageTransformers.filterNot { case (cls, _) ⇒ cls == messageClass }
+    val ref = transformerRef match {
+      case OptionVal.Some(ref) ⇒ ref.asInstanceOf[ActorRef[U]]
+      case OptionVal.None ⇒
+        // Transform is not really a T, but that is erased
+        val ref = internalSpawnAdapter[Any](msg ⇒ Transform(msg).asInstanceOf[T], "trf")
+        transformerRef = OptionVal.Some(ref)
+        ref
+    }
+    ref.asInstanceOf[ActorRef[U]]
+  }
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def messageTransformers: List[(Class[_], Any ⇒ T)] = _messageTransformers
 }
 

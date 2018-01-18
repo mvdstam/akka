@@ -5,10 +5,12 @@ package akka.actor.typed.scaladsl
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration.FiniteDuration
+import scala.reflect.ClassTag
 
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.actor.typed._
+import akka.annotation.InternalApi
 
 /**
  * An Actor is given by the combination of a [[Behavior]] and a context in
@@ -153,5 +155,10 @@ trait ActorContext[T] { this: akka.actor.typed.javadsl.ActorContext[T] ⇒
    * these ActorRefs or to stop them when no longer needed.
    */
   def spawnAdapter[U](f: U ⇒ T): ActorRef[U]
+
+  // FIXME make spawnAdapter an internal feature
+
+  // FIXME docs
+  def addMessageTransformer[U: ClassTag](f: U ⇒ T): ActorRef[U]
 
 }
